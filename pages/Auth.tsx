@@ -301,12 +301,7 @@ export const AuthPage: React.FC = () => {
               </button>
             )}
 
-            {/* Developer Hint */}
-            {view === 'login' && !user && (
-              <div className="mt-6 p-3 bg-gray-50 dark:bg-slate-900/50 rounded text-xs text-gray-400 dark:text-gray-500 border border-transparent dark:border-slate-800">
-                <p>Demo Super Admin: <span className="font-mono text-gray-600 dark:text-gray-300 select-all">{MOCK_SUPER_ADMIN.email}</span></p>
-              </div>
-            )}
+            {/* Developer Hint Removed */}
           </div>
         </div>
       </Card>
