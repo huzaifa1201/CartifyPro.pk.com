@@ -60,17 +60,18 @@ export const HomePage: React.FC = () => {
     // Fetch branches when User State changes
     useEffect(() => {
         const fetchBranches = async () => {
-            if (user && user.country) {
-                const br = await apiGetBranches(user.country, isSuperAdmin);
-                setBranches(br);
-            } else if (isSuperAdmin) {
+            if (isSuperAdmin) {
                 const br = await apiGetBranches('', true);
                 setBranches(br);
+            } else if (user && user.country) {
+                const br = await apiGetBranches(user.country, isSuperAdmin);
+                setBranches(br);
+            } else if (!user) {
+                // Visitor: Fetch ALL branches
+                const br = await apiGetBranches('');
+                setBranches(br);
             } else {
-                // Guest or no country selected: Show nothing or everything? 
-                // Requirement: "Users select country... Save it... Filter logic: When a user visits app, show..."
-                // Implies logged in. If guest, maybe empty? Or default?
-                // Let's assume empty until login/select.
+                // Logged in user with NO country (Edge case)
                 setBranches([]);
             }
         }
@@ -84,11 +85,11 @@ export const HomePage: React.FC = () => {
 
         // STRICT FILTERING:
         // - Super Admin sees all
+        // - Visitor sees all
         // - Logged in user with country: sees only their country's shops/products
-        // - Guest or user without country: sees nothing
 
-        if (isSuperAdmin) {
-            // Super Admin sees all products
+        if (isSuperAdmin || !user) {
+            // Super Admin or Visitor sees all fetched products
             availableProducts = [...products];
         } else if (user && user.country) {
             // Regular user with country - filter products by valid branch IDs
@@ -97,9 +98,11 @@ export const HomePage: React.FC = () => {
                 .filter(s => (s.country || '').toLowerCase().trim() === userCountryNormalized)
                 .map(s => s.id)
             );
+            // Double check: remove shops not in country (though apiGetBranches should have handled it)
+            availableShops = availableShops.filter(s => validBranchIds.has(s.id));
             availableProducts = products.filter(p => validBranchIds.has(p.branchID));
         } else {
-            // Guest or no country - show nothing
+            // Logged in but no country
             availableShops = [];
             availableProducts = [];
         }
@@ -180,8 +183,8 @@ export const HomePage: React.FC = () => {
         ...branches.filter(s => s.shopCategory).map(s => s.shopCategory!)
     ])).sort()];
 
-    // For visual infinite scroll
-    const slidingCategories = categories.length > 0 ? [...categories, ...categories] : [];
+    // For visual infinite scroll - Only duplicate if we have enough categories
+    const slidingCategories = categories.length > 4 ? [...categories, ...categories] : categories;
 
     const handleCategoryClick = (categoryName: string) => {
         navigate(`/category/${categoryName}`);

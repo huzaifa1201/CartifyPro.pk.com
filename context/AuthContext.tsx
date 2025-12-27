@@ -101,7 +101,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [user?.uid]); // Only re-run when user ID changes
 
-  const login = async (email: string, password: string) => {
+  const login = React.useCallback(async (email: string, password: string) => {
     setLoading(true);
     try {
       const loggedUser = await apiLogin(email, password);
@@ -109,60 +109,76 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const register = async (name: string, email: string, password: string, country: string) => {
+  const register = React.useCallback(async (name: string, email: string, password: string, country: string) => {
     setLoading(true);
     try {
       await apiRegister(name, email, password, country);
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  const resetPassword = async (email: string) => {
+  const resetPassword = React.useCallback(async (email: string) => {
     setLoading(true);
     try {
       await apiResetPassword(email);
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  const logout = async () => {
+  const logout = React.useCallback(async () => {
     await apiLogout();
     setUser(null);
-  };
+  }, []);
+
+  // Keep a ref to user to avoid re-creating callbacks that depend on it
+  const userRef = React.useRef<User | null>(null);
+  React.useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   // Allows manual refresh of user data (e.g., after "Become Seller" approval)
-  const refreshProfile = async (silent = false) => {
-    if (!user) return;
+  const refreshProfile = React.useCallback(async (silent = false) => {
+    const currentUser = userRef.current;
+    if (!currentUser) return;
+
     if (!silent) setLoading(true);
     try {
-      const freshUser = await apiGetUser(user.uid);
+      const freshUser = await apiGetUser(currentUser.uid);
       if (freshUser) {
-        apiSaveSession(freshUser);
-        setUser(freshUser);
+        // Deep compare to prevent unnecessary re-renders when polling
+        const currentStr = JSON.stringify(currentUser);
+        const freshStr = JSON.stringify(freshUser);
+
+        if (currentStr !== freshStr) {
+          apiSaveSession(freshUser);
+          setUser(freshUser);
+        }
       }
     } catch (e) {
       console.error("Failed to refresh profile", e);
     } finally {
       if (!silent) setLoading(false);
     }
-  }
+  }, []);
 
-  const value = {
+  const value = React.useMemo(() => ({
     user,
     loading,
     login,
-    register,
-    resetPassword,
-    logout,
+    register: register,
+    resetPassword: resetPassword,
+    logout: logout,
     refreshProfile,
     isAuthenticated: !!user,
     isSuperAdmin: user?.role === UserRole.SUPER_ADMIN,
     isBranchAdmin: user?.role === UserRole.BRANCH_ADMIN,
-  };
+  }), [user, loading, login, register, resetPassword, logout, refreshProfile]);
+
+
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

@@ -1,6 +1,7 @@
 
 import React, { createContext, useContext, useState } from 'react';
 import { Product, CartItem, ProductVariant } from '../types';
+import { useAuth } from './AuthContext';
 
 interface CartContextType {
   cart: CartItem[];
@@ -9,11 +10,16 @@ interface CartContextType {
   clearCart: () => void;
   total: number;
   itemCount: number;
+  showLoginModal: boolean;
+  setShowLoginModal: (show: boolean) => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
+  const [showLoginModal, setShowLoginModal] = useState(false);
+
   const [cart, setCart] = React.useState<CartItem[]>(() => {
     const saved = localStorage.getItem('nexuscart_cart');
     return saved ? JSON.parse(saved) : [];
@@ -24,6 +30,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [cart]);
 
   const addToCart = (product: Product, variant?: ProductVariant) => {
+    if (!user) {
+      setShowLoginModal(true);
+      return;
+    }
+
     setCart(prev => {
       // Find item with same Product ID AND same Variant ID (if applicable)
       const existing = prev.find(item => {
@@ -69,7 +80,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
-    <CartContext.Provider value={{ cart, addToCart, removeFromCart, clearCart, total, itemCount }}>
+    <CartContext.Provider value={{ cart, addToCart, removeFromCart, clearCart, total, itemCount, showLoginModal, setShowLoginModal }}>
       {children}
     </CartContext.Provider>
   );

@@ -30,6 +30,8 @@ import { WishlistPage } from './pages/Wishlist';
 // Shop Flow Pages
 import { CategoryShopsPage } from './pages/CategoryShopsPage';
 import { ShopPage } from './pages/ShopPage';
+import { BranchReviewsPage } from './pages/BranchReviews';
+
 // Legal Pages
 import { LegalPage } from './pages/Legal';
 
@@ -121,6 +123,12 @@ const AppRoutes = () => {
         <Route path="/dashboard/branch" element={
           <ProtectedRoute roles={[UserRole.BRANCH_ADMIN, UserRole.SUPER_ADMIN]}>
             <BranchDashboard />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/dashboard/branch/reviews" element={
+          <ProtectedRoute roles={[UserRole.BRANCH_ADMIN, UserRole.SUPER_ADMIN]}>
+            <BranchReviewsPage />
           </ProtectedRoute>
         } />
 

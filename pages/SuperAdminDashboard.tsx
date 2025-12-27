@@ -674,232 +674,476 @@ export const SuperAdminDashboard: React.FC = () => {
         </div>
     );
 
-    const renderBranches = () => (
-        <div className="space-y-6 animate-in fade-in">
-            <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Branch Management</h2>
-                <Badge color="blue">{activeBranches.length} Active Branches</Badge>
+    const renderBranches = () => {
+        const countryGroups = ['Pakistan', 'Dubai', 'India'];
+
+        return (
+            <div className="space-y-8 animate-in fade-in">
+                <div className="flex justify-between items-center">
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Branch Management</h2>
+                    <Badge color="blue">{activeBranches.length} Active Branches</Badge>
+                </div>
+
+                {countryGroups.map(country => {
+                    // Filter branches for this country. Handle "Dubai" mapping to "UAE" if necessary, but assuming "Dubai" is stored as country or mapped to it.
+                    // The app seems to use "Dubai" in COUNTRIES constant.
+                    const countryBranches = activeBranches.filter(b => {
+                        const bCountry = (b.branchCountry || b.country || '').toLowerCase();
+                        return bCountry.includes(country.toLowerCase()) || (country === 'Dubai' && bCountry.includes('uae'));
+                    });
+
+                    if (countryBranches.length === 0) return null;
+
+                    return (
+                        <div key={country} className="space-y-4">
+                            <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2 border-b pb-2 dark:border-slate-700">
+                                <span className="text-3xl">{country === 'Pakistan' ? '🇵🇰' : country === 'India' ? '🇮🇳' : '🇦🇪'}</span> {country}
+                            </h3>
+                            <Card className="!p-0 overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-sm whitespace-nowrap">
+                                        <thead className="bg-gray-50 dark:bg-slate-900 border-b dark:border-slate-700">
+                                            <tr>
+                                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Branch Name</th>
+                                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Rating</th>
+                                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Category</th>
+                                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Total Sales</th>
+                                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Total Tax</th>
+                                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Rate</th>
+                                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400 text-right">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {countryBranches.map(branch => {
+                                                const branchSales = orders.filter(o => o.branchID === branch.branchID).reduce((acc, curr) => acc + curr.totalAmount, 0);
+                                                return (
+                                                    <tr key={branch.uid} className="border-b dark:border-slate-700 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                                                        <td className="p-4">
+                                                            <div className="font-bold text-gray-900 dark:text-gray-100">{branch.name}</div>
+                                                            <div className="text-xs text-gray-500 dark:text-gray-400">{branch.email}</div>
+                                                        </td>
+                                                        <td className="p-4">
+                                                            <div className="flex items-center gap-1 text-yellow-500 font-bold">
+                                                                <Star size={14} fill="currentColor" /> {branch.rating ? branch.rating.toFixed(1) : '0.0'}
+                                                                <span className="text-gray-400 font-normal">({branch.reviewCount || 0})</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="p-4">
+                                                            <Badge color="blue">{branch.shopCategory || 'General'}</Badge>
+                                                        </td>
+                                                        <td className="p-4 font-bold text-green-700 dark:text-green-400">
+                                                            {currency}{branchSales.toLocaleString()}
+                                                        </td>
+                                                        <td className="p-4 font-bold text-orange-600 dark:text-orange-400">
+                                                            {(() => {
+                                                                const accumulated = orders
+                                                                    .filter(o => o.branchID === branch.branchID && o.status !== OrderStatus.CANCELLED)
+                                                                    .reduce((acc, curr) => {
+                                                                        const rate = branch.taxRate || 0;
+                                                                        const tax = curr.taxAmount && curr.taxAmount > 0 ? curr.taxAmount : (curr.totalAmount * (rate / 100));
+                                                                        return acc + tax;
+                                                                    }, 0);
+                                                                const paid = financePayments
+                                                                    .filter(p => p.branchID === branch.branchID && p.type === 'tax' && p.status === 'approved')
+                                                                    .reduce((acc, p) => acc + p.amount, 0);
+                                                                return `${currency}${Math.max(0, accumulated - paid).toLocaleString()}`;
+                                                            })()}
+                                                        </td>
+                                                        <td className="p-4">
+                                                            <span className="text-xs font-black px-2 py-1 bg-gray-100 dark:bg-slate-800 rounded">{branch.taxRate || 0}%</span>
+                                                        </td>
+                                                        <td className="p-4 text-right">
+                                                            <Button size="sm" variant="danger" onClick={() => handleRevokeBranch(branch.uid)}>
+                                                                <ShieldOff size={14} className="mr-1" /> Revoke
+                                                            </Button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </Card>
+                        </div>
+                    );
+                })}
+
+                {/* Unassigned / Other Branches */}
+                {(() => {
+                    const otherBranches = activeBranches.filter(b => {
+                        const bCountry = (b.branchCountry || b.country || '').toLowerCase();
+                        return !bCountry.includes('pakistan') &&
+                            !bCountry.includes('india') &&
+                            !bCountry.includes('dubai') &&
+                            !bCountry.includes('uae');
+                    });
+
+                    if (otherBranches.length === 0) return null;
+
+                    return (
+                        <div className="space-y-4">
+                            <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2 border-b pb-2 dark:border-slate-700">
+                                <span className="text-3xl">🌐</span> Others / Unassigned
+                            </h3>
+                            <Card className="!p-0 overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-sm whitespace-nowrap">
+                                        <thead className="bg-gray-50 dark:bg-slate-900 border-b dark:border-slate-700">
+                                            <tr>
+                                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Branch Name</th>
+                                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Rating</th>
+                                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Category</th>
+                                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Total Sales</th>
+                                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Total Tax</th>
+                                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Rate</th>
+                                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400 text-right">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {otherBranches.map(branch => {
+                                                const branchSales = orders.filter(o => o.branchID === branch.branchID).reduce((acc, curr) => acc + curr.totalAmount, 0);
+                                                return (
+                                                    <tr key={branch.uid} className="border-b dark:border-slate-700 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                                                        <td className="p-4">
+                                                            <div className="font-bold text-gray-900 dark:text-gray-100">{branch.name}</div>
+                                                            <div className="text-xs text-gray-500 dark:text-gray-400">{branch.email}</div>
+                                                            {(!branch.branchCountry && !branch.country) && <div className="text-[10px] text-red-500 mt-0.5">No Country</div>}
+                                                            {(branch.branchCountry || branch.country) && <div className="text-[10px] text-gray-500 mt-0.5">{branch.branchCountry || branch.country}</div>}
+                                                        </td>
+                                                        <td className="p-4">
+                                                            <div className="flex items-center gap-1 text-yellow-500 font-bold">
+                                                                <Star size={14} fill="currentColor" /> {branch.rating ? branch.rating.toFixed(1) : '0.0'}
+                                                                <span className="text-gray-400 font-normal">({branch.reviewCount || 0})</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="p-4">
+                                                            <Badge color="blue">{branch.shopCategory || 'General'}</Badge>
+                                                        </td>
+                                                        <td className="p-4 font-bold text-green-700 dark:text-green-400">
+                                                            {currency}{branchSales.toLocaleString()}
+                                                        </td>
+                                                        <td className="p-4 font-bold text-orange-600 dark:text-orange-400">
+                                                            {(() => {
+                                                                const accumulated = orders
+                                                                    .filter(o => o.branchID === branch.branchID && o.status !== OrderStatus.CANCELLED)
+                                                                    .reduce((acc, curr) => {
+                                                                        const rate = branch.taxRate || 0;
+                                                                        const tax = curr.taxAmount && curr.taxAmount > 0 ? curr.taxAmount : (curr.totalAmount * (rate / 100));
+                                                                        return acc + tax;
+                                                                    }, 0);
+                                                                const paid = financePayments
+                                                                    .filter(p => p.branchID === branch.branchID && p.type === 'tax' && p.status === 'approved')
+                                                                    .reduce((acc, p) => acc + p.amount, 0);
+                                                                return `${currency}${Math.max(0, accumulated - paid).toLocaleString()}`;
+                                                            })()}
+                                                        </td>
+                                                        <td className="p-4">
+                                                            <span className="text-xs font-black px-2 py-1 bg-gray-100 dark:bg-slate-800 rounded">{branch.taxRate || 0}%</span>
+                                                        </td>
+                                                        <td className="p-4 text-right">
+                                                            <Button size="sm" variant="danger" onClick={() => handleRevokeBranch(branch.uid)}>
+                                                                <ShieldOff size={14} className="mr-1" /> Revoke
+                                                            </Button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </Card>
+                        </div>
+                    );
+                })()}
             </div>
+        );
+    };
 
-            <Card className="!p-0 overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm whitespace-nowrap">
-                        <thead className="bg-gray-50 dark:bg-slate-900 border-b dark:border-slate-700">
-                            <tr>
-                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Branch Name</th>
-                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Rating</th>
-                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Category</th>
-                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Total Sales</th>
-                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Total Tax</th>
-                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Rate</th>
-                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400 text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {activeBranches.map(branch => {
-                                const branchSales = orders.filter(o => o.branchID === branch.branchID).reduce((acc, curr) => acc + curr.totalAmount, 0);
-                                return (
-                                    <tr key={branch.uid} className="border-b dark:border-slate-700 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                                        <td className="p-4">
-                                            <div className="font-bold text-gray-900 dark:text-gray-100">{branch.name}</div>
-                                            <div className="text-xs text-gray-500 dark:text-gray-400">{branch.email}</div>
-                                        </td>
-                                        <td className="p-4">
-                                            <div className="flex items-center gap-1 text-yellow-500 font-bold">
-                                                <Star size={14} fill="currentColor" /> {branch.rating ? branch.rating.toFixed(1) : '0.0'}
-                                                <span className="text-gray-400 font-normal">({branch.reviewCount || 0})</span>
-                                            </div>
-                                        </td>
-                                        <td className="p-4">
-                                            <Badge color="blue">{branch.shopCategory || 'General'}</Badge>
-                                        </td>
-                                        <td className="p-4 font-bold text-green-700 dark:text-green-400">
-                                            {currency}{branchSales.toLocaleString()}
-                                        </td>
-                                        <td className="p-4 font-bold text-orange-600 dark:text-orange-400">
-                                            {(() => {
-                                                const accumulated = orders
-                                                    .filter(o => o.branchID === branch.branchID && o.status !== OrderStatus.CANCELLED)
-                                                    .reduce((acc, curr) => {
-                                                        const rate = branch.taxRate || 0;
-                                                        const tax = curr.taxAmount && curr.taxAmount > 0 ? curr.taxAmount : (curr.totalAmount * (rate / 100));
-                                                        return acc + tax;
-                                                    }, 0);
-                                                const paid = financePayments
-                                                    .filter(p => p.branchID === branch.branchID && p.type === 'tax' && p.status === 'approved')
-                                                    .reduce((acc, p) => acc + p.amount, 0);
-                                                return `${currency}${Math.max(0, accumulated - paid).toLocaleString()}`;
-                                            })()}
-                                        </td>
-                                        <td className="p-4">
-                                            <span className="text-xs font-black px-2 py-1 bg-gray-100 dark:bg-slate-800 rounded">{branch.taxRate || 0}%</span>
-                                        </td>
-                                        <td className="p-4 text-right">
-                                            <Button size="sm" variant="danger" onClick={() => handleRevokeBranch(branch.uid)}>
-                                                <ShieldOff size={14} className="mr-1" /> Revoke
-                                            </Button>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                            {activeBranches.length === 0 && <tr><td colSpan={7} className="p-8 text-center text-gray-400">No active branches found.</td></tr>}
-                        </tbody>
-                    </table>
-                </div>
-            </Card>
-        </div>
-    );
+    const renderUsers = () => {
+        const countryGroups = ['Pakistan', 'Dubai', 'India'];
 
-    const renderUsers = () => (
-        <div className="space-y-6 animate-in fade-in">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">User Management</h2>
-            <Card className="!p-0 overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm whitespace-nowrap">
-                        <thead className="bg-slate-50 dark:bg-slate-900 border-b dark:border-slate-700">
-                            <tr>
-                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Name</th>
-                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Email</th>
-                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Country</th>
-                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Role</th>
-                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Status</th>
-                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400 text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {users.map(u => (
-                                <tr key={u.uid} className="border-b dark:border-slate-700 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                                    <td className="p-4 font-bold text-gray-900 dark:text-gray-100">{u.name}</td>
-                                    <td className="p-4 text-gray-600 dark:text-gray-400">{u.email}</td>
-                                    <td className="p-4">
-                                        <select
-                                            value={u.country || ''}
-                                            onChange={async (e) => {
-                                                const newCountry = e.target.value;
-                                                try {
-                                                    if (u.role === UserRole.BRANCH_ADMIN && u.branchID) {
-                                                        // Use specialized function for branch admins
-                                                        await apiUpdateBranchCountry(u.uid, u.branchID, newCountry);
-                                                    } else {
-                                                        // Regular user - just update country
-                                                        await apiUpdateProfile(u.uid, { country: newCountry });
-                                                    }
-                                                    addToast("User country updated", "success");
-                                                    loadData();
-                                                } catch (err) {
-                                                    console.error(err);
-                                                    addToast("Failed to update country", "error");
-                                                }
-                                            }}
-                                            className="bg-transparent text-sm border-0 focus:ring-0 cursor-pointer text-gray-700 dark:text-gray-300 font-medium w-32"
-                                        >
-                                            <option value="">None</option>
-                                            {COUNTRIES.map(c => <option key={c} value={c} className="dark:bg-slate-900">{c}</option>)}
-                                        </select>
-                                    </td>
-                                    <td className="p-4">
-                                        <select
-                                            value={u.role}
-                                            onChange={(e) => handleRoleChange(u.uid, e.target.value as UserRole)}
-                                            className="bg-transparent text-sm border-0 focus:ring-0 cursor-pointer text-gray-700 dark:text-gray-300 font-medium capitalize"
-                                        >
-                                            <option value={UserRole.USER} className="dark:bg-slate-900">User</option>
-                                            <option value={UserRole.BRANCH_ADMIN} className="dark:bg-slate-900">Branch Admin</option>
-                                            <option value={UserRole.SUPER_ADMIN} className="dark:bg-slate-900">Super Admin</option>
-                                        </select>
-                                    </td>
-                                    <td className="p-4">
-                                        {u.role === UserRole.BRANCH_ADMIN ? (
-                                            <div className="flex flex-col gap-1">
-                                                <div className="flex items-center gap-1">
-                                                    <span className="text-[10px] font-bold text-gray-400">TAX:</span>
-                                                    <input
-                                                        type="number"
-                                                        className="w-16 text-xs bg-gray-50 dark:bg-slate-800 border-0 rounded px-1 py-0.5"
-                                                        defaultValue={u.taxRate || 0}
-                                                        onBlur={(e) => handleUpdateBranchFinance(u.uid, { taxRate: parseFloat(e.target.value) || 0 })}
-                                                    />
-                                                    <span className="text-xs">%</span>
-                                                </div>
-                                                <div className="flex items-center gap-1">
-                                                    <span className="text-[10px] font-bold text-gray-400">SUB:</span>
-                                                    <input
-                                                        type="number"
-                                                        className="w-16 text-xs bg-gray-50 dark:bg-slate-800 border-0 rounded px-1 py-0.5"
-                                                        defaultValue={u.monthlySubscriptionFee || 0}
-                                                        onBlur={(e) => handleUpdateBranchFinance(u.uid, { monthlySubscriptionFee: parseFloat(e.target.value) || 0 })}
-                                                    />
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <span className="text-gray-400 italic text-xs">N/A</span>
-                                        )}
-                                    </td>
-                                    <td className="p-4 font-medium">
-                                        {u.suspensionUntil && u.suspensionUntil > Date.now() ? (
-                                            <Badge color="red">Suspended</Badge>
-                                        ) : (
-                                            <Badge color="green">Active</Badge>
-                                        )}
-                                    </td>
-                                    <td className="p-4 text-right">
-                                        <div className="flex justify-end gap-2">
-                                            {u.role === UserRole.BRANCH_ADMIN && (
-                                                u.suspensionUntil && u.suspensionUntil > Date.now() ? (
-                                                    <Button size="sm" variant="secondary" onClick={() => handleUnsuspendUser(u.uid)}>Unsuspend</Button>
-                                                ) : (
-                                                    <Button size="sm" variant="secondary" onClick={() => {
-                                                        setSuspensionForm({ ...suspensionForm, userId: u.uid });
-                                                        setShowSuspensionModal(true);
-                                                    }}>Suspend</Button>
-                                                )
-                                            )}
-                                            <Button size="sm" variant="danger" onClick={() => handleDeleteUser(u.uid)} disabled={u.role === UserRole.SUPER_ADMIN}>
-                                                <Trash2 size={16} />
-                                            </Button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </Card>
+        return (
+            <div className="space-y-8 animate-in fade-in">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">User Management</h2>
 
-            {showSuspensionModal && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-                    <Card className="w-full max-w-md p-6 animate-in zoom-in-95">
-                        <h3 className="text-xl font-bold mb-4 dark:text-white">Suspend Shop</h3>
-                        <form onSubmit={handleSuspendUser} className="space-y-4">
-                            <Input
-                                label="Suspension Duration (Days)"
-                                type="number"
-                                value={suspensionForm.days}
-                                onChange={e => setSuspensionForm({ ...suspensionForm, days: parseInt(e.target.value) || 0 })}
-                                min="1"
-                                required
-                            />
-                            <div className="flex flex-col">
-                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Reason for Suspension</label>
-                                <textarea
-                                    className="w-full px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100"
-                                    rows={3}
-                                    value={suspensionForm.reason}
-                                    onChange={e => setSuspensionForm({ ...suspensionForm, reason: e.target.value })}
-                                    placeholder="Explain why the shop is being suspended..."
-                                    required
-                                />
-                            </div>
-                            <div className="flex gap-3 justify-end mt-6">
-                                <Button type="button" variant="secondary" onClick={() => setShowSuspensionModal(false)}>Cancel</Button>
-                                <Button type="submit" variant="danger">Confirm Suspension</Button>
-                            </div>
-                        </form>
-                    </Card>
-                </div>
-            )}
-        </div>
-    );
+                {countryGroups.map(country => {
+                    const countryUsers = users.filter(u => {
+                        const uCountry = (u.country || '').toLowerCase();
+                        return uCountry.includes(country.toLowerCase()) || (country === 'Dubai' && uCountry.includes('uae'));
+                    });
+
+                    if (countryUsers.length === 0) return null;
+
+                    return (
+                        <div key={country} className="space-y-4">
+                            <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2 border-b pb-2 dark:border-slate-700">
+                                <span className="text-3xl">{country === 'Pakistan' ? '🇵🇰' : country === 'India' ? '🇮🇳' : '🇦🇪'}</span> {country}
+                            </h3>
+                            <Card className="!p-0 overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-sm whitespace-nowrap">
+                                        <thead className="bg-slate-50 dark:bg-slate-900 border-b dark:border-slate-700">
+                                            <tr>
+                                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Name</th>
+                                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Email</th>
+                                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Country</th>
+                                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Role</th>
+                                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Status</th>
+                                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400 text-right">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {countryUsers.map(u => (
+                                                <tr key={u.uid} className="border-b dark:border-slate-700 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                                                    <td className="p-4 font-bold text-gray-900 dark:text-gray-100">{u.name}</td>
+                                                    <td className="p-4 text-gray-600 dark:text-gray-400">{u.email}</td>
+                                                    <td className="p-4">
+                                                        <select
+                                                            value={u.country || ''}
+                                                            onChange={async (e) => {
+                                                                const newCountry = e.target.value;
+                                                                try {
+                                                                    if (u.role === UserRole.BRANCH_ADMIN && u.branchID) {
+                                                                        await apiUpdateBranchCountry(u.uid, u.branchID, newCountry);
+                                                                    } else {
+                                                                        await apiUpdateProfile(u.uid, { country: newCountry });
+                                                                    }
+                                                                    addToast("User country updated", "success");
+                                                                    loadData();
+                                                                } catch (err) {
+                                                                    addToast("Failed to update country", "error");
+                                                                }
+                                                            }}
+                                                            className="bg-transparent text-sm border-0 focus:ring-0 cursor-pointer text-gray-700 dark:text-gray-300 font-medium w-32"
+                                                        >
+                                                            <option value="">None</option>
+                                                            {COUNTRIES.map(c => <option key={c} value={c} className="dark:bg-slate-900">{c}</option>)}
+                                                        </select>
+                                                    </td>
+                                                    <td className="p-4">
+                                                        <select
+                                                            value={u.role}
+                                                            onChange={(e) => handleRoleChange(u.uid, e.target.value as UserRole)}
+                                                            className="bg-transparent text-sm border-0 focus:ring-0 cursor-pointer text-gray-700 dark:text-gray-300 font-medium capitalize"
+                                                        >
+                                                            <option value={UserRole.USER} className="dark:bg-slate-900">User</option>
+                                                            <option value={UserRole.BRANCH_ADMIN} className="dark:bg-slate-900">Branch Admin</option>
+                                                            <option value={UserRole.SUPER_ADMIN} className="dark:bg-slate-900">Super Admin</option>
+                                                        </select>
+                                                    </td>
+                                                    <td className="p-4">
+                                                        {u.role === UserRole.BRANCH_ADMIN ? (
+                                                            <div className="flex flex-col gap-1">
+                                                                <div className="flex items-center gap-1">
+                                                                    <span className="text-[10px] font-bold text-gray-400">TAX:</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        className="w-16 text-xs bg-gray-50 dark:bg-slate-800 border-0 rounded px-1 py-0.5"
+                                                                        defaultValue={u.taxRate || 0}
+                                                                        onBlur={(e) => handleUpdateBranchFinance(u.uid, { taxRate: parseFloat(e.target.value) || 0 })}
+                                                                    />
+                                                                    <span className="text-xs">%</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-1">
+                                                                    <span className="text-[10px] font-bold text-gray-400">SUB:</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        className="w-16 text-xs bg-gray-50 dark:bg-slate-800 border-0 rounded px-1 py-0.5"
+                                                                        defaultValue={u.monthlySubscriptionFee || 0}
+                                                                        onBlur={(e) => handleUpdateBranchFinance(u.uid, { monthlySubscriptionFee: parseFloat(e.target.value) || 0 })}
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-gray-400 italic text-xs">N/A</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="p-4 font-medium">
+                                                        {u.suspensionUntil && u.suspensionUntil > Date.now() ? (
+                                                            <Badge color="red">Suspended</Badge>
+                                                        ) : (
+                                                            <Badge color="green">Active</Badge>
+                                                        )}
+                                                    </td>
+                                                    <td className="p-4 text-right">
+                                                        <div className="flex justify-end gap-2">
+                                                            {u.role === UserRole.BRANCH_ADMIN && (
+                                                                u.suspensionUntil && u.suspensionUntil > Date.now() ? (
+                                                                    <Button size="sm" variant="secondary" onClick={() => handleUnsuspendUser(u.uid)}>Unsuspend</Button>
+                                                                ) : (
+                                                                    <Button size="sm" variant="secondary" onClick={() => {
+                                                                        setSuspensionForm({ ...suspensionForm, userId: u.uid });
+                                                                        setShowSuspensionModal(true);
+                                                                    }}>Suspend</Button>
+                                                                )
+                                                            )}
+                                                            <Button size="sm" variant="danger" onClick={() => handleDeleteUser(u.uid)} disabled={u.role === UserRole.SUPER_ADMIN}>
+                                                                <Trash2 size={16} />
+                                                            </Button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </Card>
+                        </div>
+                    );
+                })}
+
+                {/* Unassigned / Other Users */}
+                {(() => {
+                    const otherUsers = users.filter(u => {
+                        const uCountry = (u.country || '').toLowerCase();
+                        return !uCountry.includes('pakistan') &&
+                            !uCountry.includes('india') &&
+                            !uCountry.includes('dubai') &&
+                            !uCountry.includes('uae');
+                    });
+
+                    if (otherUsers.length === 0) return null;
+
+                    return (
+                        <div key="others" className="space-y-4">
+                            <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2 border-b pb-2 dark:border-slate-700">
+                                <span className="text-3xl">🌐</span> Others / Unassigned
+                            </h3>
+                            <Card className="!p-0 overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-sm whitespace-nowrap">
+                                        <thead className="bg-slate-50 dark:bg-slate-900 border-b dark:border-slate-700">
+                                            <tr>
+                                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Name</th>
+                                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Email</th>
+                                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Country</th>
+                                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Role</th>
+                                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400">Status</th>
+                                                <th className="p-4 font-medium text-gray-500 dark:text-gray-400 text-right">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {otherUsers.map(u => (
+                                                <tr key={u.uid} className="border-b dark:border-slate-700 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                                                    <td className="p-4 font-bold text-gray-900 dark:text-gray-100">{u.name}</td>
+                                                    <td className="p-4 text-gray-600 dark:text-gray-400">{u.email}</td>
+                                                    <td className="p-4">
+                                                        <select
+                                                            value={u.country || ''}
+                                                            onChange={async (e) => {
+                                                                const newCountry = e.target.value;
+                                                                try {
+                                                                    if (u.role === UserRole.BRANCH_ADMIN && u.branchID) {
+                                                                        await apiUpdateBranchCountry(u.uid, u.branchID, newCountry);
+                                                                    } else {
+                                                                        await apiUpdateProfile(u.uid, { country: newCountry });
+                                                                    }
+                                                                    addToast("User country updated", "success");
+                                                                    loadData();
+                                                                } catch (err) {
+                                                                    addToast("Failed to update country", "error");
+                                                                }
+                                                            }}
+                                                            className="bg-transparent text-sm border-0 focus:ring-0 cursor-pointer text-gray-700 dark:text-gray-300 font-medium w-32"
+                                                        >
+                                                            <option value="">None</option>
+                                                            {COUNTRIES.map(c => <option key={c} value={c} className="dark:bg-slate-900">{c}</option>)}
+                                                        </select>
+                                                    </td>
+                                                    <td className="p-4">
+                                                        <select
+                                                            value={u.role}
+                                                            onChange={(e) => handleRoleChange(u.uid, e.target.value as UserRole)}
+                                                            className="bg-transparent text-sm border-0 focus:ring-0 cursor-pointer text-gray-700 dark:text-gray-300 font-medium capitalize"
+                                                        >
+                                                            <option value={UserRole.USER} className="dark:bg-slate-900">User</option>
+                                                            <option value={UserRole.BRANCH_ADMIN} className="dark:bg-slate-900">Branch Admin</option>
+                                                            <option value={UserRole.SUPER_ADMIN} className="dark:bg-slate-900">Super Admin</option>
+                                                        </select>
+                                                    </td>
+                                                    <td className="p-4">
+                                                        {u.role === UserRole.BRANCH_ADMIN ? (
+                                                            <div className="flex flex-col gap-1">
+                                                                <div className="flex items-center gap-1">
+                                                                    <span className="text-[10px] font-bold text-gray-400">TAX:</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        className="w-16 text-xs bg-gray-50 dark:bg-slate-800 border-0 rounded px-1 py-0.5"
+                                                                        defaultValue={u.taxRate || 0}
+                                                                        onBlur={(e) => handleUpdateBranchFinance(u.uid, { taxRate: parseFloat(e.target.value) || 0 })}
+                                                                    />
+                                                                    <span className="text-xs">%</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-1">
+                                                                    <span className="text-[10px] font-bold text-gray-400">SUB:</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        className="w-16 text-xs bg-gray-50 dark:bg-slate-800 border-0 rounded px-1 py-0.5"
+                                                                        defaultValue={u.monthlySubscriptionFee || 0}
+                                                                        onBlur={(e) => handleUpdateBranchFinance(u.uid, { monthlySubscriptionFee: parseFloat(e.target.value) || 0 })}
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-gray-400 italic text-xs">N/A</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="p-4 font-medium">
+                                                        {u.suspensionUntil && u.suspensionUntil > Date.now() ? (
+                                                            <Badge color="red">Suspended</Badge>
+                                                        ) : (
+                                                            <Badge color="green">Active</Badge>
+                                                        )}
+                                                    </td>
+                                                    <td className="p-4 text-right">
+                                                        <div className="flex justify-end gap-2">
+                                                            {u.role === UserRole.BRANCH_ADMIN && (
+                                                                u.suspensionUntil && u.suspensionUntil > Date.now() ? (
+                                                                    <Button size="sm" variant="secondary" onClick={() => handleUnsuspendUser(u.uid)}>Unsuspend</Button>
+                                                                ) : (
+                                                                    <Button size="sm" variant="secondary" onClick={() => {
+                                                                        setSuspensionForm({ ...suspensionForm, userId: u.uid });
+                                                                        setShowSuspensionModal(true);
+                                                                    }}>Suspend</Button>
+                                                                )
+                                                            )}
+                                                            <Button size="sm" variant="danger" onClick={() => handleDeleteUser(u.uid)} disabled={u.role === UserRole.SUPER_ADMIN}>
+                                                                <Trash2 size={16} />
+                                                            </Button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </Card>
+                        </div>
+                    );
+                })()}
+
+                {/* Global Suspension Modal */}
+                {showSuspensionModal && (
+                    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+                        <Card className="w-full max-w-md p-6 animate-in zoom-in-95">
+                            <h3 className="text-xl font-bold mb-4 dark:text-white">Suspend Shop</h3>
+                            <form onSubmit={handleSuspendUser} className="space-y-4">
+                                <Input label="Suspension Duration (Days)" type="number" value={suspensionForm.days} onChange={e => setSuspensionForm({ ...suspensionForm, days: parseInt(e.target.value) || 0 })} min="1" required />
+                                <div className="flex flex-col">
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Reason for Suspension</label>
+                                    <textarea className="w-full px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100" rows={3} value={suspensionForm.reason} onChange={e => setSuspensionForm({ ...suspensionForm, reason: e.target.value })} placeholder="Explain why the shop is being suspended..." required />
+                                </div>
+                                <div className="flex gap-3 justify-end mt-6">
+                                    <Button type="button" variant="secondary" onClick={() => setShowSuspensionModal(false)}>Cancel</Button>
+                                    <Button type="submit" variant="danger">Confirm Suspension</Button>
+                                </div>
+                            </form>
+                        </Card>
+                    </div>
+                )}
+            </div>
+        );
+    };
 
     const renderOrders = () => {
         const filteredOrders = orders.filter(o =>

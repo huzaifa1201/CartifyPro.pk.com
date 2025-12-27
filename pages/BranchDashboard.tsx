@@ -32,7 +32,7 @@ import {
 } from '../services/api';
 import { Product, Order, OrderStatus, Coupon, InventoryLog, Chat, ChatMessage, UserRole, ProductVariant, Dispute, DisputeStatus, Category, FinancePayment, PlatformPaymentAccount } from '../types';
 import { Card, Button, Input, Badge, Textarea, Select } from '../components/UI';
-import { Plus, Trash2, Edit2, Package, TrendingUp, DollarSign, CheckCircle, Truck, RefreshCw, History, X, UploadCloud, FileSpreadsheet, AlertTriangle, Share2, Copy, ExternalLink, LayoutDashboard, ShoppingBag, ClipboardList, Users, Settings, Search, Filter, Ticket, MessageSquare, Printer, Calendar, BarChart2, Layers, Crown, Sparkles, Tag, Banknote, ShieldOff, Wallet, CreditCard, Eye, User as UserIcon, MapPin } from 'lucide-react';
+import { Plus, Trash2, Edit2, Package, TrendingUp, DollarSign, CheckCircle, Truck, RefreshCw, History, X, UploadCloud, FileSpreadsheet, AlertTriangle, Share2, Copy, ExternalLink, LayoutDashboard, ShoppingBag, ClipboardList, Users, Settings, Search, Filter, Ticket, MessageSquare, Printer, Calendar, BarChart2, Layers, Crown, Sparkles, Tag, Banknote, ShieldOff, Wallet, CreditCard, Eye, User as UserIcon, MapPin, Star } from 'lucide-react';
 import { getCurrency } from '../constants';
 import { Link, useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line } from 'recharts';
@@ -1662,6 +1662,11 @@ export const BranchDashboard: React.FC = () => {
                                 <AlertTriangle size={18} /> <span className="md:inline">Reports</span>
                             </button>
                             <div className="my-2 border-t border-gray-100 dark:border-slate-800"></div>
+                            <Link to="/dashboard/branch/reviews">
+                                <button className="flex-shrink-0 md:w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
+                                    <Star size={18} /> <span className="md:inline">Reviews</span>
+                                </button>
+                            </Link>
                             <Link to="/dashboard/branch/staff">
                                 <button className="flex-shrink-0 md:w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
                                     <Users size={18} /> <span className="md:inline">Staff</span>

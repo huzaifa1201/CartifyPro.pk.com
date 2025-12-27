@@ -27,8 +27,8 @@ export const CategoryShopsPage: React.FC = () => {
     const load = async () => {
       setLoading(true);
       try {
-        // STRICT: Non-superadmin must have country set
-        if (!isSuperAdmin && !user?.country) {
+        // STRICT: If logged in, must have country. If visitor, allow.
+        if (user && !user.country && !isSuperAdmin) {
           setShops([]);
           setLoading(false);
           return;
@@ -94,8 +94,8 @@ export const CategoryShopsPage: React.FC = () => {
           <Store size={48} className="mx-auto text-gray-300 dark:text-gray-600 mb-4" />
           <h3 className="text-xl font-bold text-gray-700 dark:text-gray-300">No Shops Found</h3>
           <p className="text-gray-500 dark:text-gray-400">
-            {user?.country
-              ? `There are currently no shops in "${categoryName}" available in ${user.country}.`
+            {user
+              ? (user.country ? `There are currently no shops in "${categoryName}" available in ${user.country}.` : `Please select a country to view shops.`)
               : `There are currently no shops listed in this category.`}
           </p>
           <Link to="/"><Button variant="outline" className="mt-4">Back to Home</Button></Link>

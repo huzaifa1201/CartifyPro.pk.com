@@ -32,8 +32,8 @@ export const ShopPage: React.FC = () => {
     const navigate = useNavigate();
 
     useEffect(() => {
-        const load = async () => {
-            setLoading(true);
+        const load = async (isSilent = false) => {
+            if (!isSilent) setLoading(true);
             try {
                 // Optimized Data Fetching
                 // 1. Resolve Branch ID (Handle Slugs)
@@ -84,13 +84,13 @@ export const ShopPage: React.FC = () => {
             } catch (e) {
                 console.error("Error loading shop details", e);
             } finally {
-                setLoading(false);
+                if (!isSilent) setLoading(false);
             }
         };
 
         if (branchId) {
-            load();
-            const interval = setInterval(load, 30000); // 30s refresh
+            load(false);
+            const interval = setInterval(() => load(true), 30000); // 30s refresh silent
             return () => clearInterval(interval);
         }
     }, [branchId, user?.country, isSuperAdmin, navigate, addToast, user]);
@@ -267,7 +267,7 @@ export const ShopPage: React.FC = () => {
             ) : (
                 <div className="max-w-2xl mx-auto space-y-8">
                     {/* Review Form */}
-                    {user && user.role === UserRole.USER && (
+                    {user && user.uid !== shopUser?.uid && (
                         <Card className="p-6 bg-gray-50 dark:bg-slate-900/50 border-gray-200 dark:border-slate-800">
                             <h4 className="font-bold mb-4 text-gray-900 dark:text-gray-100">Rate this Shop</h4>
                             <form onSubmit={handleSubmitReview} className="space-y-4">

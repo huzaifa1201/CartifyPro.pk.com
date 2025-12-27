@@ -676,8 +676,8 @@ export const apiGetBranches = async (country: string, isSuperAdmin: boolean = fa
     } else if (country) {
       q = query(branchesRef, where("country", "==", country), where("status", "==", "approved"));
     } else {
-      // No country set - return empty
-      return [];
+      // No country set - Return ALL approved branches (Visitor Mode)
+      q = query(branchesRef, where("status", "==", "approved"));
     }
 
     const snapshot = await getDocs(q);
@@ -723,12 +723,15 @@ export const apiGetBranches = async (country: string, isSuperAdmin: boolean = fa
       // 1. Have a country set
       // 2. Match the user's country case-insensitively
       if (!isSuperAdmin) {
-        // Require country match
-        const normalizedUserCountry = (country || '').toLowerCase().trim();
-        const normalizedBranchCountry = userBranchCountry.toLowerCase().trim();
+        // Require country match ONLY if country is specified (Logged In User)
+        // If country is undefined (Visitor), allow all
+        if (country) {
+          const normalizedUserCountry = country.toLowerCase().trim();
+          const normalizedBranchCountry = userBranchCountry.toLowerCase().trim();
 
-        if (!normalizedUserCountry || !normalizedBranchCountry || normalizedBranchCountry !== normalizedUserCountry) {
-          return; // Skip - country mismatch or not set
+          if (!normalizedUserCountry || !normalizedBranchCountry || normalizedBranchCountry !== normalizedUserCountry) {
+            return; // Skip - country mismatch
+          }
         }
       }
 
@@ -1049,31 +1052,36 @@ export const apiGetReviews = async (productId: string): Promise<Review[]> => {
 }
 
 export const apiAddReview = async (review: Omit<Review, 'id' | 'date'>): Promise<Review> => {
-  const newReview = {
-    ...review,
-    date: new Date().toISOString()
-  };
-
-  // 1. Add review doc
-  const docRef = await addDoc(collection(db, "reviews"), newReview);
-
-  // 2. Update Product Rating stats
+  // 1. Get Product to find Branch ID and current stats
   const productRef = doc(db, "products", review.productID);
   const productSnap = await getDoc(productRef);
 
-  if (productSnap.exists()) {
-    const prodData = productSnap.data() as Product;
-    const currentRating = prodData.rating || 0;
-    const currentCount = prodData.reviewCount || 0;
-
-    const newCount = currentCount + 1;
-    const newAvg = ((currentRating * currentCount) + review.rating) / newCount;
-
-    await updateDoc(productRef, {
-      rating: newAvg,
-      reviewCount: newCount
-    });
+  if (!productSnap.exists()) {
+    throw new Error("Product not found");
   }
+
+  const prodData = productSnap.data() as Product;
+
+  const newReview = {
+    ...review,
+    branchID: prodData.branchID, // Add branchID for easier querying later
+    date: new Date().toISOString()
+  };
+
+  // 2. Add review doc
+  const docRef = await addDoc(collection(db, "reviews"), newReview);
+
+  // 3. Update Product Rating stats
+  const currentRating = prodData.rating || 0;
+  const currentCount = prodData.reviewCount || 0;
+
+  const newCount = currentCount + 1;
+  const newAvg = ((currentRating * currentCount) + review.rating) / newCount;
+
+  await updateDoc(productRef, {
+    rating: newAvg,
+    reviewCount: newCount
+  });
 
   return { ...newReview, id: docRef.id };
 }
@@ -1098,31 +1106,48 @@ export const apiAddShopReview = async (review: Omit<ShopReview, 'id' | 'date'>):
   // 2. Find the Branch User to update rating
   const userUid = review.branchID.replace('branch-', '');
 
+  // Update USER doc
   let userRef = doc(db, "users", userUid);
   let userSnap = await getDoc(userRef);
 
   if (!userSnap.exists()) {
+    // Try to find by branchID field if ID logic fails
     const q = query(collection(db, "users"), where("branchID", "==", review.branchID));
     const qSnap = await getDocs(q);
     if (!qSnap.empty) {
       userRef = qSnap.docs[0].ref;
       userSnap = qSnap.docs[0];
-    } else {
-      throw new Error("Branch user not found to update rating.");
     }
   }
 
-  const userData = userSnap.data() as User;
-  const currentRating = userData.rating || 0;
-  const currentCount = userData.reviewCount || 0;
+  if (userSnap.exists()) {
+    const userData = userSnap.data() as User;
+    const currentRating = userData.rating || 0;
+    const currentCount = userData.reviewCount || 0;
 
-  const newCount = currentCount + 1;
-  const newRating = ((currentRating * currentCount) + review.rating) / newCount;
+    const newCount = currentCount + 1;
+    const newRating = ((currentRating * currentCount) + review.rating) / newCount;
 
-  await updateDoc(userRef, {
-    rating: newRating,
-    reviewCount: newCount
-  });
+    await updateDoc(userRef, {
+      rating: newRating,
+      reviewCount: newCount
+    });
+
+    // 3. SYNC TO BRANCHES COLLECTION (Critical Fix)
+    // If the branch document exists, update it too so the Shop Page sees the new rating.
+    try {
+      const branchRef = doc(db, "branches", review.branchID);
+      const branchSnap = await getDoc(branchRef);
+      if (branchSnap.exists()) {
+        await updateDoc(branchRef, {
+          rating: newRating,
+          reviewCount: newCount
+        });
+      }
+    } catch (e) {
+      console.warn("Failed to sync rating to branches doc", e);
+    }
+  }
 
   return { ...newReview, id: docRef.id };
 }
